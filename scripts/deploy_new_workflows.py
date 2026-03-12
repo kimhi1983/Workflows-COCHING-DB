@@ -50,6 +50,15 @@ def deploy_workflow(cur, wf_id, wf_json):
         VALUES (?, ?, ?, ?, '[]', ?, ?)""",
         (vid, wf_id, nodes, conns, now, now))
 
+    # shared_workflow 등록 (없으면 추가) — 없으면 n8n 활성화 실패
+    PROJECT_ID = 'S8alj7gDKji6RuhA'
+    cur.execute('SELECT workflowId FROM shared_workflow WHERE workflowId=?', (wf_id,))
+    if not cur.fetchone():
+        cur.execute("""INSERT INTO shared_workflow
+            (workflowId, projectId, role)
+            VALUES (?, ?, 'workflow:owner')""",
+            (wf_id, PROJECT_ID))
+
     return vid
 
 
