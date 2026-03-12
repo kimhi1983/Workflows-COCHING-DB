@@ -1,0 +1,88 @@
+{
+  "name": "[원료DB] EWG Skin Deep 등급 수집",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "days", "daysInterval": 7 }] } },
+      "id": "schedule-ewg",
+      "name": "Schedule (주 1회)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 수집 대상 원료 목록 (INCI명)\n// 실제 운영 시 Google Sheets나 DB에서 가져오기\nconst ingredients = [\n  'PHENOXYETHANOL',\n  'SALICYLIC ACID',\n  'NIACINAMIDE',\n  'RETINOL',\n  'TOCOPHEROL',\n  'GLYCERIN',\n  'BUTYLENE GLYCOL',\n  'SODIUM HYALURONATE',\n  'TITANIUM DIOXIDE',\n  'ZINC OXIDE',\n  'ETHYLHEXYL METHOXYCINNAMATE',\n  'BENZOPHENONE-3',\n  'METHYLISOTHIAZOLINONE',\n  'DIMETHICONE',\n  'CETEARYL ALCOHOL',\n  'SODIUM LAURYL SULFATE',\n  'PROPYLPARABEN',\n  'METHYLPARABEN',\n  'FRAGRANCE',\n  'TRICLOSAN'\n];\n\nreturn ingredients.map(name => ({\n  json: {\n    inci_name: name,\n    search_url: `https://www.ewg.org/skindeep/search/?search=${encodeURIComponent(name)}`\n  }\n}));"
+      },
+      "id": "code-ingredient-list",
+      "name": "원료 목록",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [250, 0]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.search_url }}",
+        "options": {
+          "response": { "response": { "responseFormat": "text" } },
+          "timeout": 10000
+        }
+      },
+      "id": "http-ewg-search",
+      "name": "EWG 검색",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 0],
+      "notes": "Rate limit 주의: 배치 간 1-2초 딜레이 권장"
+    },
+    {
+      "parameters": {
+        "jsCode": "// EWG 검색 결과에서 등급 추출\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const html = item.json.data || item.json.body || '';\n  const inci = item.json.inci_name;\n  \n  // EWG 등급 패턴 매칭 (HTML에서)\n  const scoreMatch = html.match(/data-score=\"(\\d+)\"/i) ||\n                     html.match(/hazard-score[^>]*>(\\d+)/i) ||\n                     html.match(/score-(\\d+)/i);\n  \n  const score = scoreMatch ? parseInt(scoreMatch[1]) : null;\n  \n  results.push({\n    json: {\n      inci_name: inci,\n      ewg_score: score,\n      ewg_url: item.json.search_url,\n      raw_available: html.length > 0,\n      collected_at: new Date().toISOString()\n    }\n  });\n}\n\nreturn results;"
+      },
+      "id": "code-parse-ewg",
+      "name": "EWG 등급 파싱",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 0]
+    },
+    {
+      "parameters": {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"화장품 원료 '{{ $json.inci_name }}'에 대해 EWG Skin Deep 등급과 안전성 정보를 알려주세요.\\n\\nJSON 응답:\\n{\\n  \\\"ewg_score_estimated\\\": 1-10,\\n  \\\"concerns\\\": [\\\"주요 우려사항\\\"],\\n  \\\"common_usage\\\": \\\"일반적 용도\\\",\\n  \\\"max_conc_eu\\\": \\\"EU 최대농도 (알려진 경우)\\\",\\n  \\\"restriction_notes\\\": \\\"규제 참고사항\\\"\\n}\"\n    }]\n  }]\n}",
+        "options": {}
+      },
+      "id": "gemini-ewg-supplement",
+      "name": "Gemini 보완 분석",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1000, 0],
+      "notes": "스크래핑 실패 시 Gemini로 보완"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": { "__rl": true, "value": "", "mode": "url" },
+        "sheetName": { "__rl": true, "value": "원료DB_EWG", "mode": "name" },
+        "columns": { "mappingMode": "autoMapInputData", "value": {} },
+        "options": {}
+      },
+      "id": "gsheet-ewg",
+      "name": "Sheets 저장 (EWG)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1250, 0]
+    }
+  ],
+  "connections": {
+    "Schedule (주 1회)": { "main": [[{ "node": "원료 목록", "type": "main", "index": 0 }]] },
+    "원료 목록": { "main": [[{ "node": "EWG 검색", "type": "main", "index": 0 }]] },
+    "EWG 검색": { "main": [[{ "node": "EWG 등급 파싱", "type": "main", "index": 0 }]] },
+    "EWG 등급 파싱": { "main": [[{ "node": "Gemini 보완 분석", "type": "main", "index": 0 }]] },
+    "Gemini 보완 분석": { "main": [[{ "node": "Sheets 저장 (EWG)", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "원료DB" }, { "name": "EWG" }]
+}

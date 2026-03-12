@@ -1,0 +1,71 @@
+{
+  "name": "[원료DB] 국가별 최대농도 수집",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "days", "daysInterval": 7 }] } },
+      "id": "schedule-conc",
+      "name": "Schedule (주 1회)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// CosIng API로 EU 제한물질 목록 조회\nconst targetIngredients = [\n  'SALICYLIC ACID', 'PHENOXYETHANOL', 'BENZOPHENONE-3',\n  'TITANIUM DIOXIDE', 'ZINC OXIDE', 'RETINOL',\n  'METHYLISOTHIAZOLINONE', 'TRICLOSAN', 'SODIUM LAURYL SULFATE',\n  'ETHYLHEXYL METHOXYCINNAMATE', 'PROPYLPARABEN', 'METHYLPARABEN'\n];\n\nreturn targetIngredients.map(name => ({\n  json: { inci_name: name }\n}));"
+      },
+      "id": "code-target-ingredients",
+      "name": "대상 원료",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [250, 0]
+    },
+    {
+      "parameters": {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"화장품 원료 '{{ $json.inci_name }}'의 국가별 규제와 최대 허용 농도를 조사해주세요.\\n\\n반드시 아래 JSON 형식으로 응답:\\n{\\n  \\\"inci_name\\\": \\\"{{ $json.inci_name }}\\\",\\n  \\\"cas_number\\\": \\\"CAS번호\\\",\\n  \\\"regulations\\\": {\\n    \\\"EU\\\": {\\n      \\\"status\\\": \\\"allowed|restricted|banned\\\",\\n      \\\"annex\\\": \\\"해당 Annex\\\",\\n      \\\"max_concentration\\\": \\\"최대농도%\\\",\\n      \\\"conditions\\\": \\\"사용조건\\\"\\n    },\\n    \\\"US\\\": {\\n      \\\"status\\\": \\\"allowed|restricted|banned\\\",\\n      \\\"regulation_ref\\\": \\\"규제 근거\\\",\\n      \\\"max_concentration\\\": \\\"최대농도%\\\",\\n      \\\"notes\\\": \\\"비고\\\"\\n    },\\n    \\\"JP\\\": {\\n      \\\"status\\\": \\\"allowed|restricted|banned\\\",\\n      \\\"max_concentration\\\": \\\"최대농도%\\\",\\n      \\\"quasi_drug\\\": true/false,\\n      \\\"notes\\\": \\\"비고\\\"\\n    },\\n    \\\"CN\\\": {\\n      \\\"status\\\": \\\"allowed|restricted|banned\\\",\\n      \\\"max_concentration\\\": \\\"최대농도%\\\",\\n      \\\"notes\\\": \\\"비고\\\"\\n    },\\n    \\\"ASEAN\\\": {\\n      \\\"status\\\": \\\"allowed|restricted|banned\\\",\\n      \\\"max_concentration\\\": \\\"최대농도%\\\",\\n      \\\"notes\\\": \\\"비고\\\"\\n    }\\n  },\\n  \\\"cir_assessment\\\": \\\"CIR 평가 결과\\\",\\n  \\\"primary_function\\\": \\\"주요 기능\\\"\\n}\"\n    }]\n  }]\n}",
+        "options": {}
+      },
+      "id": "gemini-conc",
+      "name": "Gemini 최대농도 조회",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  try {\n    const text = item.json?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';\n    const jsonStr = text.replace(/```json\\n?|```/g, '').trim();\n    const data = JSON.parse(jsonStr);\n    results.push({ json: { ...data, collected_at: new Date().toISOString() } });\n  } catch(e) {\n    results.push({ json: { error: e.message, raw: item.json } });\n  }\n}\nreturn results;"
+      },
+      "id": "code-parse-conc",
+      "name": "결과 파싱",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 0]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": { "__rl": true, "value": "", "mode": "url" },
+        "sheetName": { "__rl": true, "value": "원료DB_최대농도", "mode": "name" },
+        "columns": { "mappingMode": "autoMapInputData", "value": {} },
+        "options": {}
+      },
+      "id": "gsheet-conc",
+      "name": "Sheets 저장 (최대농도)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1000, 0]
+    }
+  ],
+  "connections": {
+    "Schedule (주 1회)": { "main": [[{ "node": "대상 원료", "type": "main", "index": 0 }]] },
+    "대상 원료": { "main": [[{ "node": "Gemini 최대농도 조회", "type": "main", "index": 0 }]] },
+    "Gemini 최대농도 조회": { "main": [[{ "node": "결과 파싱", "type": "main", "index": 0 }]] },
+    "결과 파싱": { "main": [[{ "node": "Sheets 저장 (최대농도)", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "원료DB" }, { "name": "최대농도" }]
+}

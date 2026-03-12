@@ -1,0 +1,84 @@
+{
+  "name": "[규제수집] ASEAN - GEMINI_ASEAN",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "days", "daysInterval": 3 }] } },
+      "id": "schedule-asean",
+      "name": "Schedule (3일)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "url": "https://www.fda.moph.go.th/sites/Cosmetic/SitePages/Main.aspx",
+        "options": { "response": { "response": { "responseFormat": "text" } } }
+      },
+      "id": "http-thai-fda",
+      "name": "Thai FDA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [250, -50]
+    },
+    {
+      "parameters": {
+        "url": "https://www.hsa.gov.sg/cosmetic-products",
+        "options": { "response": { "response": { "responseFormat": "text" } } }
+      },
+      "id": "http-hsa",
+      "name": "HSA Singapore",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [250, 150]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst results = [];\nfor (const item of items) {\n  results.push({\n    json: {\n      source: item.json.url?.includes('hsa') ? 'hsa_sg' : 'thai_fda',\n      raw_html: (item.json.data || '').substring(0, 3000),\n      url: item.json.url || '',\n      region: 'ASEAN',\n      gemini_tag: 'GEMINI_ASEAN'\n    }\n  });\n}\nreturn results;"
+      },
+      "id": "code-parse-asean",
+      "name": "ASEAN 파싱",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 0]
+    },
+    {
+      "parameters": {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"다음 ASEAN 지역 화장품 규제 페이지를 분석해주세요.\\n\\nSource: {{ $json.source }}\\nHTML 일부: {{ $json.raw_html }}\\n\\n화장품 관련 최신 공지/규제 변경사항이 있다면 JSON 응답:\\n{\\n  \\\"has_updates\\\": true/false,\\n  \\\"updates\\\": [{\\n    \\\"title\\\": \\\"제목\\\",\\n    \\\"summary_ko\\\": \\\"한글 요약\\\",\\n    \\\"category\\\": \\\"new_rule|amendment|guidance\\\",\\n    \\\"severity\\\": \\\"high|medium|low\\\"\\n  }]\\n}\"\n    }]\n  }]\n}",
+        "options": {}
+      },
+      "id": "gemini-asean",
+      "name": "Gemini ASEAN 분석",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 0]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": { "__rl": true, "value": "", "mode": "url" },
+        "sheetName": { "__rl": true, "value": "규제수집_ASEAN", "mode": "name" },
+        "columns": { "mappingMode": "autoMapInputData", "value": {} },
+        "options": {}
+      },
+      "id": "gsheet-asean",
+      "name": "Sheets 저장 (ASEAN)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1000, 0]
+    }
+  ],
+  "connections": {
+    "Schedule (3일)": { "main": [[{ "node": "Thai FDA", "type": "main", "index": 0 }, { "node": "HSA Singapore", "type": "main", "index": 0 }]] },
+    "Thai FDA": { "main": [[{ "node": "ASEAN 파싱", "type": "main", "index": 0 }]] },
+    "HSA Singapore": { "main": [[{ "node": "ASEAN 파싱", "type": "main", "index": 0 }]] },
+    "ASEAN 파싱": { "main": [[{ "node": "Gemini ASEAN 분석", "type": "main", "index": 0 }]] },
+    "Gemini ASEAN 분석": { "main": [[{ "node": "Sheets 저장 (ASEAN)", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "규제수집" }, { "name": "ASEAN" }, { "name": "GEMINI_ASEAN" }]
+}

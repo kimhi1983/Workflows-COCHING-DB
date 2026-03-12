@@ -1,0 +1,84 @@
+{
+  "name": "[규제수집] CN/NMPA - GEMINI_CN",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "hours", "hoursInterval": 12 }] } },
+      "id": "schedule-cn",
+      "name": "Schedule (12시간)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "url": "https://cosmetic.chemlinked.com/news",
+        "options": { "response": { "response": { "responseFormat": "text" } } }
+      },
+      "id": "http-chemlinked",
+      "name": "ChemLinked News",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [250, -50]
+    },
+    {
+      "parameters": {
+        "url": "https://www.nmpa.gov.cn/xxgk/ggtg/index.html",
+        "options": { "response": { "response": { "responseFormat": "text" } } }
+      },
+      "id": "http-nmpa",
+      "name": "NMPA 공고",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [250, 150]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const html = item.json.data || item.json.body || '';\n  const linkRegex = /<a[^>]+href=\"([^\"]+)\"[^>]*>([^<]+)<\\/a>/gi;\n  let match;\n  let count = 0;\n  while ((match = linkRegex.exec(html)) && count < 10) {\n    const title = match[2].trim();\n    if (title.length > 5 && (title.includes('化妆品') || title.includes('cosmetic') || title.includes('化妆') || title.includes('原料'))) {\n      results.push({\n        json: {\n          source: item.json.url?.includes('nmpa') ? 'nmpa' : 'chemlinked',\n          title,\n          url: match[1].startsWith('http') ? match[1] : `https://www.nmpa.gov.cn${match[1]}`,\n          region: 'CN',\n          gemini_tag: 'GEMINI_CN'\n        }\n      });\n      count++;\n    }\n  }\n}\n\nreturn results.length ? results : [{ json: { skip: true, region: 'CN' } }];"
+      },
+      "id": "code-parse-cn",
+      "name": "CN 결과 파싱",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 0]
+    },
+    {
+      "parameters": {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"다음 중국 화장품 규제 문서를 분석해주세요 (중문/영문 모두 가능).\\n\\n제목: {{ $json.title }}\\nURL: {{ $json.url }}\\n\\nJSON 응답:\\n{\\n  \\\"summary_ko\\\": \\\"한글 요약\\\",\\n  \\\"category\\\": \\\"new_rule|amendment|new_ingredient|recall|guidance\\\",\\n  \\\"nmpa_type\\\": \\\"일반화장품|특수화장품|신원료\\\",\\n  \\\"affected_ingredients\\\": [],\\n  \\\"severity\\\": \\\"high|medium|low\\\"\\n}\"\n    }]\n  }]\n}",
+        "options": {}
+      },
+      "id": "gemini-cn",
+      "name": "Gemini CN 분석",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 0]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": { "__rl": true, "value": "", "mode": "url" },
+        "sheetName": { "__rl": true, "value": "규제수집_CN", "mode": "name" },
+        "columns": { "mappingMode": "autoMapInputData", "value": {} },
+        "options": {}
+      },
+      "id": "gsheet-cn",
+      "name": "Sheets 저장 (CN)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1000, 0]
+    }
+  ],
+  "connections": {
+    "Schedule (12시간)": { "main": [[{ "node": "ChemLinked News", "type": "main", "index": 0 }, { "node": "NMPA 공고", "type": "main", "index": 0 }]] },
+    "ChemLinked News": { "main": [[{ "node": "CN 결과 파싱", "type": "main", "index": 0 }]] },
+    "NMPA 공고": { "main": [[{ "node": "CN 결과 파싱", "type": "main", "index": 0 }]] },
+    "CN 결과 파싱": { "main": [[{ "node": "Gemini CN 분석", "type": "main", "index": 0 }]] },
+    "Gemini CN 분석": { "main": [[{ "node": "Sheets 저장 (CN)", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "규제수집" }, { "name": "CN" }, { "name": "GEMINI_CN" }]
+}

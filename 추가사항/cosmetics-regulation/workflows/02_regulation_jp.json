@@ -1,0 +1,84 @@
+{
+  "name": "[규제수집] JP/厚労省 - GEMINI_JP",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "hours", "hoursInterval": 24 }] } },
+      "id": "schedule-jp",
+      "name": "Schedule (24시간)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "url": "https://www.mhlw.go.jp/stf/seisakunitsuite/bunya/kenkou_iryou/iyakuhin/cosmetics/index.html",
+        "options": { "response": { "response": { "responseFormat": "text" } } }
+      },
+      "id": "http-mhlw",
+      "name": "MHLW 화장품 페이지",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [250, -50]
+    },
+    {
+      "parameters": {
+        "url": "https://www.pmda.go.jp/safety/info-services/drugs/calling-attention/safety-info/0001.html",
+        "options": { "response": { "response": { "responseFormat": "text" } } }
+      },
+      "id": "http-pmda",
+      "name": "PMDA 안전성정보",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [250, 150]
+    },
+    {
+      "parameters": {
+        "jsCode": "// HTML에서 최신 공지 추출\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const html = item.json.data || item.json.body || '';\n  // 간단한 링크/제목 추출 (Cheerio 없이)\n  const linkRegex = /<a[^>]+href=\"([^\"]+)\"[^>]*>([^<]+)<\\/a>/gi;\n  let match;\n  let count = 0;\n  while ((match = linkRegex.exec(html)) && count < 10) {\n    const url = match[1];\n    const title = match[2].trim();\n    if (title.length > 10 && (title.includes('化粧') || title.includes('cosmetic') || title.includes('薬') || title.includes('通知'))) {\n      results.push({\n        json: {\n          source: item.json.url?.includes('pmda') ? 'pmda' : 'mhlw',\n          title,\n          url: url.startsWith('http') ? url : `https://www.mhlw.go.jp${url}`,\n          region: 'JP',\n          gemini_tag: 'GEMINI_JP'\n        }\n      });\n      count++;\n    }\n  }\n}\n\nreturn results.length ? results : [{ json: { skip: true, region: 'JP' } }];"
+      },
+      "id": "code-parse-jp",
+      "name": "JP 결과 파싱",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 0]
+    },
+    {
+      "parameters": {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"다음 일본 화장품/의약부외품 규제 문서를 분석해주세요.\\n\\n제목: {{ $json.title }}\\nURL: {{ $json.url }}\\n\\nJSON 응답:\\n{\\n  \\\"summary_ko\\\": \\\"한글 요약\\\",\\n  \\\"category\\\": \\\"new_rule|amendment|guidance|recall|safety_alert\\\",\\n  \\\"is_quasi_drug\\\": true/false,\\n  \\\"affected_ingredients\\\": [],\\n  \\\"severity\\\": \\\"high|medium|low\\\"\\n}\"\n    }]\n  }]\n}",
+        "options": {}
+      },
+      "id": "gemini-jp",
+      "name": "Gemini JP 분석",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 0]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": { "__rl": true, "value": "", "mode": "url" },
+        "sheetName": { "__rl": true, "value": "규제수집_JP", "mode": "name" },
+        "columns": { "mappingMode": "autoMapInputData", "value": {} },
+        "options": {}
+      },
+      "id": "gsheet-jp",
+      "name": "Sheets 저장 (JP)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1000, 0]
+    }
+  ],
+  "connections": {
+    "Schedule (24시간)": { "main": [[{ "node": "MHLW 화장품 페이지", "type": "main", "index": 0 }, { "node": "PMDA 안전성정보", "type": "main", "index": 0 }]] },
+    "MHLW 화장품 페이지": { "main": [[{ "node": "JP 결과 파싱", "type": "main", "index": 0 }]] },
+    "PMDA 안전성정보": { "main": [[{ "node": "JP 결과 파싱", "type": "main", "index": 0 }]] },
+    "JP 결과 파싱": { "main": [[{ "node": "Gemini JP 분석", "type": "main", "index": 0 }]] },
+    "Gemini JP 분석": { "main": [[{ "node": "Sheets 저장 (JP)", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "규제수집" }, { "name": "JP" }, { "name": "GEMINI_JP" }]
+}
