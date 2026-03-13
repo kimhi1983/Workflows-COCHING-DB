@@ -6,7 +6,11 @@ v2 변경사항:
   - SQL 파라미터 바인딩 (인젝션 방지)
   - 재시도 로직 (파싱 실패 시 1회 재시도)
 """
-import json, subprocess, sys, time, re, os, urllib.request
+import json, subprocess, sys, time, re, os, urllib.request, io
+
+# Windows cp949 인코딩 문제 방지
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyBxMGCU97ghOR8BgZOaZ2DH8YTAtNB0zqk")
 BATCH_SIZE = 5
@@ -15,12 +19,13 @@ DELAY = 4
 COUNTRIES = ["KR", "EU", "US", "JP", "CN"]
 
 DB_ENV = {**os.environ, "PGPASSWORD": "coching2026!"}
-DB_CMD = ["psql", "-h", "172.21.144.1", "-U", "coching_user", "-d", "coching_db", "-t", "-A"]
+PSQL = os.environ.get("PSQL_PATH", r"C:\Program Files\PostgreSQL\17\bin\psql.exe")
+DB_CMD = [PSQL, "-h", "172.21.144.1", "-U", "coching_user", "-d", "coching_db", "-t", "-A"]
 
 
 def run_sql(sql):
     """SQL 실행 (파라미터 없는 단순 쿼리용)"""
-    r = subprocess.run(DB_CMD + ["-c", sql], capture_output=True, text=True, env=DB_ENV)
+    r = subprocess.run(DB_CMD + ["-c", sql], capture_output=True, text=True, env=DB_ENV, encoding="utf-8")
     return r.stdout.strip()
 
 
@@ -40,7 +45,7 @@ def run_sql_params(sql, params):
     result_sql = sql
     for e in escaped:
         result_sql = result_sql.replace("%s", e, 1)
-    r = subprocess.run(DB_CMD + ["-c", result_sql], capture_output=True, text=True, env=DB_ENV)
+    r = subprocess.run(DB_CMD + ["-c", result_sql], capture_output=True, text=True, env=DB_ENV, encoding="utf-8")
     return r.stdout.strip()
 
 

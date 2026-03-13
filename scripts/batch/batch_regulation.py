@@ -12,7 +12,8 @@ GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyBxMGCU97ghOR8BgZOaZ2DH8YTAt
 DELAY = 4
 
 DB_ENV = {**os.environ, "PGPASSWORD": "coching2026!"}
-DB_CMD = ["psql", "-h", "172.21.144.1", "-U", "coching_user", "-d", "coching_db", "-t", "-A"]
+PSQL = os.environ.get("PSQL_PATH", r"C:\Program Files\PostgreSQL\17\bin\psql.exe")
+DB_CMD = [PSQL, "-h", "172.21.144.1", "-U", "coching_user", "-d", "coching_db", "-t", "-A"]
 
 # 비화장품 카테고리 — 이 카테고리로 분류된 문서는 저장하지 않음
 EXCLUDED_CATEGORIES = {
@@ -26,7 +27,7 @@ EXCLUDED_CATEGORIES = {
 
 
 def run_sql(sql):
-    r = subprocess.run(DB_CMD + ["-c", sql], capture_output=True, text=True, env=DB_ENV)
+    r = subprocess.run(DB_CMD + ["-c", sql], capture_output=True, text=True, env=DB_ENV, encoding="utf-8")
     return r.stdout.strip()
 
 
@@ -41,7 +42,7 @@ def run_sql_params(sql, params):
     result_sql = sql
     for e in escaped:
         result_sql = result_sql.replace("%s", e, 1)
-    r = subprocess.run(DB_CMD + ["-c", result_sql], capture_output=True, text=True, env=DB_ENV)
+    r = subprocess.run(DB_CMD + ["-c", result_sql], capture_output=True, text=True, env=DB_ENV, encoding="utf-8")
     return r.stdout.strip()
 
 
