@@ -9,8 +9,9 @@ import sqlite3
 import json
 
 DB = '/home/kpros/.n8n/database.sqlite'
-OLD_KEY = 'AIzaSyAXhVn-G1r9XuMDOm__AP_gt5Do9lrXHtk'
-NEW_KEY = 'AIzaSyBBFQlkFXHJPD75eNlWfjIWzXoKm9CgZss'
+# [ARCHIVED] 이전 키 교체용 스크립트 — 현재는 환경변수($env.GEMINI_API_KEY) 방식 사용
+OLD_KEY = 'REMOVED_FOR_SECURITY'
+NEW_KEY = 'USE_ENV_VAR'
 
 conn = sqlite3.connect(DB)
 cur = conn.cursor()

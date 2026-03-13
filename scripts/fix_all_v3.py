@@ -8,10 +8,10 @@ import sqlite3, json, uuid
 from datetime import datetime
 
 DB = '/home/kpros/.n8n/database.sqlite'
-OLD_KEY = 'AIzaSyBBFQlkFXHJPD75eNlWfjIWzXoKm9CgZss'
-NEW_KEY = 'AIzaSyAMLi4_wB7lwMsbkg7tEo1F0-KF34ew-GA'
-# 이전 키도 교체
-OLD_KEY2 = 'AIzaSyAXhVn-G1r9XuMDOm__AP_gt5Do9lrXHtk'
+# [ARCHIVED] 이전 키 교체용 스크립트 — 현재는 환경변수($env.GEMINI_API_KEY) 방식 사용
+OLD_KEY = 'REMOVED_FOR_SECURITY'
+NEW_KEY = 'USE_ENV_VAR'
+OLD_KEY2 = 'REMOVED_FOR_SECURITY'
 
 conn = sqlite3.connect(DB)
 cur = conn.cursor()

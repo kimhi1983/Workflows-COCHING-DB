@@ -10,9 +10,11 @@ import sqlite3, json, uuid
 from datetime import datetime
 
 DB = '/home/kpros/.n8n/database.sqlite'
-GEMINI_KEY = 'AIzaSyAMLi4_wB7lwMsbkg7tEo1F0-KF34ew-GA'
+import os
+GEMINI_KEY = os.environ.get('GEMINI_API_KEY', 'SET_VIA_ENV')  # PM2 ecosystem.config.js에서 설정
 PG_CRED_ID = '2c8e9119-0bb0-49f2-ad43-f040ab4a7a64'
-GEMINI_URL = f'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_KEY}'
+# n8n 워크플로우에서는 {{ $env.GEMINI_API_KEY }} 사용
+GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={{ $env.GEMINI_API_KEY }}'
 
 conn = sqlite3.connect(DB)
 cur = conn.cursor()
