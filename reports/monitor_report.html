@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>COCHING 워크플로우 모니터</title>
+<style>
+  body { font-family: 'Segoe UI', sans-serif; background:#f5f6fa; color:#222; margin:0; padding:20px; }
+  h1 { color:#dc3545; margin-bottom:4px; }
+  .ts { color:#888; font-size:.9em; margin-bottom:20px; }
+  h2 { border-bottom:2px solid #dee2e6; padding-bottom:6px; margin-top:28px; }
+  table { border-collapse:collapse; width:100%; background:#fff; border-radius:6px; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,.08); margin-bottom:20px; }
+  th { background:#495057; color:#fff; padding:10px 12px; text-align:left; font-size:.85em; }
+  td { padding:9px 12px; border-bottom:1px solid #f0f0f0; font-size:.88em; vertical-align:top; }
+  tr:last-child td { border-bottom:none; }
+  tr:hover td { background:#f8f9ff; }
+  pre { background:#1e1e2e; color:#cdd6f4; padding:14px; border-radius:6px; font-size:.82em; overflow-x:auto; }
+</style>
+</head>
+<body>
+<h1>COCHING 워크플로우 모니터링</h1>
+<div class="ts">생성: 2026-03-13 15:39:10 KST</div>
+
+        <div style="background:#fff3cd;border-left:4px solid #ffc107;padding:12px 16px;margin:16px 0;border-radius:4px;">
+          <strong>⚑ 알림 1건</strong>
+          <ul style="margin:8px 0 0 0"><li>연속 3회 실패 — CRITICAL</li></ul>
+        </div>
+
+<h2>n8n 워크플로우 상태</h2>
+<table>
+  <tr>
+    <th>워크플로우</th><th>활성</th><th>상태</th>
+    <th>마지막 실행</th><th>성공/실패(5건)</th>
+    <th>연속실패</th><th>마지막 오류</th><th>알림</th>
+  </tr>
+  
+        <tr>
+          <td>제품카피 가이드 v1.0</td>
+          <td>활성</td>
+          <td><span style="background:#28a745;color:#fff;padding:2px 8px;border-radius:4px;font-size:.8em;font-weight:700;">OK</span></td>
+          <td>2026-03-13T06:36:32<br><small style="color:#888">3분 전</small></td>
+          <td style="text-align:center">
+            <span style="color:#28a745">✓5</span> /
+            <span style="color:#dc3545">✗0</span>
+          </td>
+          <td style="color:#dc3545;font-size:.85em">0</td>
+          <td style="font-size:.82em">-</td>
+          <td style="font-size:.82em">-</td>
+        </tr>
+        <tr>
+          <td>원료 수집 v7</td>
+          <td>활성</td>
+          <td><span style="background:#28a745;color:#fff;padding:2px 8px;border-radius:4px;font-size:.8em;font-weight:700;">OK</span></td>
+          <td>2026-03-13T06:30:34<br><small style="color:#888">9분 전</small></td>
+          <td style="text-align:center">
+            <span style="color:#28a745">✓5</span> /
+            <span style="color:#dc3545">✗0</span>
+          </td>
+          <td style="color:#dc3545;font-size:.85em">0</td>
+          <td style="font-size:.82em">-</td>
+          <td style="font-size:.82em">-</td>
+        </tr>
+        <tr>
+          <td>제품 수집 v1</td>
+          <td>활성</td>
+          <td><span style="background:#28a745;color:#fff;padding:2px 8px;border-radius:4px;font-size:.8em;font-weight:700;">OK</span></td>
+          <td>2026-03-13T06:30:27<br><small style="color:#888">9분 전</small></td>
+          <td style="text-align:center">
+            <span style="color:#28a745">✓5</span> /
+            <span style="color:#dc3545">✗0</span>
+          </td>
+          <td style="color:#dc3545;font-size:.85em">0</td>
+          <td style="font-size:.82em">-</td>
+          <td style="font-size:.82em">-</td>
+        </tr>
+        <tr>
+          <td>원료 안전성 강화 v1</td>
+          <td>활성</td>
+          <td><span style="background:#ffc107;color:#fff;padding:2px 8px;border-radius:4px;font-size:.8em;font-weight:700;">WARNING</span></td>
+          <td>2026-03-13T04:00:06<br><small style="color:#888">159분 전</small></td>
+          <td style="text-align:center">
+            <span style="color:#28a745">✓0</span> /
+            <span style="color:#dc3545">✗1</span>
+          </td>
+          <td style="color:#dc3545;font-size:.85em">1</td>
+          <td style="font-size:.82em">-</td>
+          <td style="font-size:.82em">-</td>
+        </tr>
+        <tr>
+          <td>다국가 규제 모니터링 v1</td>
+          <td>활성</td>
+          <td><span style="background:#dc3545;color:#fff;padding:2px 8px;border-radius:4px;font-size:.8em;font-weight:700;">CRITICAL</span></td>
+          <td>2026-03-13T04:00:17<br><small style="color:#888">159분 전</small></td>
+          <td style="text-align:center">
+            <span style="color:#28a745">✓1</span> /
+            <span style="color:#dc3545">✗3</span>
+          </td>
+          <td style="color:#dc3545;font-size:.85em">3</td>
+          <td style="font-size:.82em">-</td>
+          <td style="font-size:.82em"><span style="color:#b8860b;">⚑ 연속 3회 실패 — CRITICAL</span></td>
+        </tr>
+</table>
+
+<h2>PostgreSQL DB 현황</h2>
+<table>
+  <tr><th>테이블</th><th>현재 행 수</th><th>증감</th></tr>
+  <tr><td>ingredient_master</td><td>25,612</td><td><span style="color:#888">±0</span></td></tr><tr><td>product_master</td><td>16,044</td><td><span style="color:#888">±0</span></td></tr><tr><td>regulation_cache</td><td>3,833</td><td><span style="color:#28a745">+1</span></td></tr><tr><td>guide_cache</td><td>215</td><td><span style="color:#888">±0</span></td></tr><tr><td>guide_cache_copy</td><td>597</td><td><span style="color:#888">±0</span></td></tr><tr><td>product_ingredients</td><td>412</td><td><span style="color:#888">±0</span></td></tr>
+</table>
+
+<h2>크론 백업 상태</h2>
+<table>
+  <tr><th>백업 경로</th><th>마지막 파일</th></tr>
+  <tr><td>/mnt/e/COCHING-WORKFLOW/backup/db-json</td><td><span style="color:#28a745">최근 0.2시간 전</span></td></tr><tr><td>/mnt/e/COCHING-WORKFLOW/backup/pgdump</td><td><span style="color:#28a745">최근 0.5시간 전</span></td></tr><tr><td>/mnt/e/COCHING-WORKFLOW/backup/excel</td><td><span style="color:#28a745">최근 0.2시간 전</span></td></tr><tr><td>/mnt/e/COCHING-WORKFLOW/backup/formulations</td><td><span style="color:#28a745">최근 0.5시간 전</span></td></tr>
+</table>
+
+<h2>crontab 미리보기</h2>
+<pre># 환경변수
+COCHING_DB_PASS=coching2026!
+COCHING_DB_USER=coching_user
+COCHING_DB_NAME=coching_db
+COCHING_DB_HOST=127.0.0.1
+
+# COCHING pg_dump 전체 백업 (매일 03:00, 15:00)
+0 3,15 * * * /bin/bash /home/kpros/coching_backup.sh &gt;&gt; /home/kpros/backup/logs/pgdump.log 2&gt;&1
+
+# COCHING DB 테이블 JSON 이중 백업 (30분마다)
+*/30 * * * * python3 /home/kpros/backup/scripts/auto_backup_db.py &gt;&gt; /home/kpros/backup/logs/db_backup.log 2&gt;&1
+
+# COCHING 가이드처방 자동 생성 (30분마다)
+# DISABLED: replaced by n8n v2.2 workflow
+#*/30 * * * * python3 /home/kpros/backup/scripts/auto_guide_formulate.py &gt;&gt; /home/kpros/backup/logs/guide.log 2&gt;&1
+
+# COCHING Excel 누적 저장 (30분마다)
+*/30 * * * * python3 /mnt/e/COCHING-WORKFLOW/scripts/cron/auto_excel_export.py &gt;&gt; /home/kpros/backup/logs/excel.log 2&gt;&1
+
+# COCHING 워크플로우 일일 리포트 (매일 08:00)
+0 8 * * * python3 /</pre>
+
+</body>
+</html>

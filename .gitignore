@@ -1,0 +1,20 @@
+# 백업 데이터 (대용량, Git 추적 불필요)
+backup/db-json/
+backup/pgdump/
+backup/excel/
+backup/formulations/
+backup/n8n-workflows/
+
+# Python
+__pycache__/
+*.pyc
+
+# 환경변수
+.env
+
+# OS
+Thumbs.db
+.DS_Store
+
+# 모니터 상태 파일
+scripts/monitor/monitor_state.json

@@ -57,7 +57,7 @@ function downloadImage(url, filepath) {
   });
 }
 
-// ── 브라우저 초기화 ──
+// ── 브라우저 초기화 (stealth + WAF 통과) ──
 async function initBrowser() {
   const browser = await chromium.launch({
     headless: CONFIG.headless,
@@ -68,11 +68,26 @@ async function initBrowser() {
     ],
   });
   const context = await browser.newContext({
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     locale: 'ko-KR',
-    viewport: { width: 1280, height: 800 },
+    viewport: { width: 1440, height: 900 },
+  });
+  // 봇 탐지 우회 (navigator.webdriver 제거 등)
+  await context.addInitScript(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+    window.chrome = { runtime: {} };
+    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+    Object.defineProperty(navigator, 'languages', { get: () => ['ko-KR', 'ko', 'en-US', 'en'] });
   });
   return { browser, context };
+}
+
+// ── 세션 사전 획득 (WAF 토큰 + 쿠키) ──
+async function warmupSession(page) {
+  console.log('  세션 획득 중 (메인 페이지)...');
+  await page.goto('https://www.hwahae.co.kr/', { waitUntil: 'networkidle', timeout: 30000 });
+  await sleep(3000);
+  console.log('  세션 획득 완료');
 }
 
 // ── 화해 검색 → 제품 목록 수집 (API 인터셉트 + __NEXT_DATA__ + DOM) ──
@@ -260,160 +275,55 @@ function makeProduct(p) {
   };
 }
 
-// ── 제품 상세 페이지 스크래핑 (API 인터셉트 포함) ──
+// ── 제품 상세 페이지 — __NEXT_DATA__.productIngredientInfoData에서 전성분 추출 ──
 async function getProductDetail(page, product) {
   const url = product.hwahae_url;
   if (!url) return product;
 
-  console.log('\n' + String.fromCodePoint(0x1F4CB) + ' 상세: ' + (product.brand || '?') + ' - ' + (product.name || product.hwahae_id));
-
   try {
-    // API 응답 캡처 (전성분 등 클라이언트 API)
-    const detailApis = [];
-    const apiHandler = async (response) => {
-      const rurl = response.url();
-      if (response.status() === 200 &&
-          (rurl.includes('ingredient') || rurl.includes('product') || rurl.includes('/api/')) &&
-          (response.headers()['content-type'] || '').includes('json')) {
-        try {
-          const body = await response.json();
-          detailApis.push({ url: rurl, body });
-        } catch (e) { /* not json */ }
-      }
-    };
-    page.on('response', apiHandler);
-
     await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
     await sleep(3000);
 
-    // 전성분 탭/섹션 클릭 시도 (화해는 전성분을 숨겨둘 수 있음)
-    try {
-      const ingTab = await page.$('[class*="ingredient"], [class*="Ingredient"], [data-tab*="ingredient"], button:has-text("전성분"), a:has-text("전성분"), span:has-text("전성분")');
-      if (ingTab) {
-        await ingTab.click();
-        await sleep(2000);
-      }
-    } catch (e) { /* 탭이 없을 수 있음 */ }
-
-    // API 인터셉트에서 전성분 추출
-    let ingredients = [];
-    for (const resp of detailApis) {
-      const data = resp.body;
-      // ingredients 직접 배열
-      const ingList = data?.ingredients || data?.data?.ingredients ||
-                      data?.ingredientList || data?.data?.ingredientList ||
-                      data?.fullIngredients || data?.data?.fullIngredients;
-      if (Array.isArray(ingList) && ingList.length > 0) {
-        ingredients = ingList.map((ing, idx) => ({
-          name_ko: typeof ing === 'string' ? ing : (ing.name || ing.korean_name || ing.koreanName || ing.nameKo || ''),
-          name_inci: typeof ing === 'string' ? '' : (ing.inci_name || ing.inciName || ing.inci || ing.englishName || ''),
-          ewg_grade: typeof ing === 'string' ? null : (ing.ewg_grade || ing.ewgGrade || ing.ewgScore || ing.grade || null),
-          ewg_color: typeof ing === 'string' ? '' : (ing.ewg_color || ing.ewgColor || ing.gradeColor || ''),
-          order: idx + 1,
-        }));
-        break;
-      }
-    }
-
-    // 페이지 DOM/NEXT_DATA에서 추출
     const detail = await page.evaluate(() => {
-      const result = { ingredients: [], images: [] };
-
+      const result = { ingredients: [] };
       const nextScript = document.getElementById('__NEXT_DATA__');
-      if (nextScript) {
-        try {
-          const data = JSON.parse(nextScript.textContent);
-          const props = data.props?.pageProps || {};
-          const p = props.product || props.detail || props.data || props;
+      if (!nextScript) return result;
 
-          result.name = p.title || p.name || p.productName || '';
-          result.brand = p.brand || p.brandName || '';
-          result.category = p.category || p.categoryName || '';
-          result.price = p.price || p.salePrice || null;
-          result.full_image_url = p.imageUrl || p.image || '';
-          result.rating = p.rating || p.averageRating || null;
-          result.review_count = p.reviewCount || null;
-          result.description = p.description || '';
+      try {
+        const data = JSON.parse(nextScript.textContent);
+        const props = data.props?.pageProps || {};
 
-          if (Array.isArray(p.images)) result.images = p.images;
-          if (Array.isArray(p.imageList)) result.images = p.imageList;
-
-          // 전성분
-          const ings = p.ingredients || p.ingredientList || p.fullIngredients || [];
-          if (Array.isArray(ings) && ings.length > 0) {
-            result.ingredients = ings.map((ing, idx) => ({
-              name_ko: typeof ing === 'string' ? ing : (ing.name || ing.koreanName || ing.nameKo || ''),
-              name_inci: typeof ing === 'string' ? '' : (ing.inciName || ing.inci || ing.englishName || ''),
-              ewg_grade: typeof ing === 'string' ? null : (ing.ewgGrade || ing.ewgScore || null),
-              ewg_color: typeof ing === 'string' ? '' : (ing.ewgColor || ing.gradeColor || ''),
-              order: idx + 1,
-            }));
-          }
-        } catch (e) { /* ignore */ }
-      }
-
-      // DOM 보완: 이미지
-      if (!result.full_image_url) {
-        const ogImg = document.querySelector('meta[property="og:image"]');
-        if (ogImg) result.full_image_url = ogImg.content;
-      }
-
-      // DOM 보완: 이름
-      if (!result.name) {
-        const ogTitle = document.querySelector('meta[property="og:title"]');
-        if (ogTitle) result.name = ogTitle.content;
-      }
-
-      // DOM 보완: 전성분
-      if (result.ingredients.length === 0) {
-        // 전성분 텍스트가 한 덩어리로 있을 수 있음
-        const allText = document.body.innerText || '';
-        const ingMatch = allText.match(/전성분[:\s]*([\s\S]{20,2000}?)(?=\n\n|\n[가-힣]+\s|$)/);
-        if (ingMatch) {
-          const raw = ingMatch[1].trim();
-          const parts = raw.split(/[,，]/).map(s => s.trim()).filter(s => s.length > 0 && s.length < 100);
-          if (parts.length >= 3) {
-            result.ingredients = parts.map((name, idx) => ({
-              name_ko: name,
-              name_inci: '',
-              ewg_grade: null,
-              ewg_color: '',
-              order: idx + 1,
-            }));
-          }
+        // 화해 전성분 구조: productIngredientInfoData.ingredients[]
+        const ingData = props.productIngredientInfoData;
+        if (ingData && Array.isArray(ingData.ingredients)) {
+          result.ingredients = ingData.ingredients.map((ing, idx) => ({
+            id: ing.id || null,
+            name_ko: (ing.korean || '').split(',')[0].trim(),
+            name_inci: (ing.english || '').split(',')[0].trim(),
+            ewg_grade: ing.ewg ? parseInt(ing.ewg) : null,
+            ewg_data: ing.ewg_data_availability_text || '',
+            is_allergy: ing.is_allergy || false,
+            skin_type: ing.skin_type || null,
+            purpose: ing.purpose || '',
+            limitation: ing.limitation || '',
+            forbidden: ing.forbidden || '',
+            order: idx + 1,
+          }));
         }
-      }
-
+      } catch (e) { /* ignore */ }
       return result;
     });
 
-    // API 인터셉트 해제
-    page.removeListener('response', apiHandler);
-
-    // 전성분: API > NEXT_DATA > DOM 우선순위
-    const finalIngredients = ingredients.length > 0 ? ingredients :
-                             detail.ingredients.length > 0 ? detail.ingredients : [];
-
-    // 병합 (검색에서 가져온 원래 이름 우선, OG title은 긴 홍보문구 포함)
-    const detailName = detail.name || '';
-    const useName = (product.name && product.name.length < 100) ? product.name :
-                    (detailName.length < 100 ? detailName : product.name);
+    const ingCount = detail.ingredients.length;
+    const mark = ingCount > 0 ? String.fromCodePoint(0x2705) : String.fromCodePoint(0x274C);
+    console.log('   ' + mark + ' 전성분: ' + ingCount + '개  (' + (product.brand || '') + ' - ' + (product.name || ''));
 
     return {
       ...product,
-      name: useName,
-      brand: detail.brand || product.brand,
-      category: detail.category || product.category,
-      price: detail.price || product.price,
-      full_image_url: detail.full_image_url || product.thumbnail_url,
-      images: detail.images || [],
-      rating: detail.rating || product.rating,
-      review_count: detail.review_count || product.review_count,
-      description: detail.description || '',
-      ingredients: finalIngredients,
+      ingredients: detail.ingredients,
     };
   } catch (e) {
-    console.log('   ' + String.fromCodePoint(0x274C) + ' 에러: ' + e.message);
+    console.log('   ' + String.fromCodePoint(0x274C) + ' 상세 에러: ' + e.message);
     return product;
   }
 }
@@ -435,14 +345,16 @@ async function main() {
   const page = await context.newPage();
 
   try {
-    // 1단계: 검색
+    // 1단계: 세션 사전 획득 (WAF 토큰 + 쿠키)
+    await warmupSession(page);
+
+    // 2단계: 검색
     const products = await searchProducts(page, keyword, maxCount);
 
     if (products.length === 0) {
       console.log('\n' + String.fromCodePoint(0x26A0) + ' 검색 결과가 없습니다.');
       console.log('   화해는 SPA로 렌더링하므로 페이지 구조가 변경되었을 수 있습니다.');
 
-      // 디버깅: 스크린샷 + HTML 저장
       await page.screenshot({ path: path.join(CONFIG.outputDir, 'debug_search.png'), fullPage: true });
       const html = await page.content();
       fs.writeFileSync(path.join(CONFIG.outputDir, 'debug_search.html'), html);
@@ -452,12 +364,16 @@ async function main() {
       return;
     }
 
-    // 2단계: 이미지 다운로드 (상세 페이지는 WAF 차단으로 스킵)
+    // 3단계: 상세 페이지 → 전성분 추출 + 이미지 다운로드
+    console.log('\n' + String.fromCodePoint(0x1F9EA) + ' 상세 페이지 크롤링 (전성분 + 이미지)...');
     const detailed = [];
     for (let i = 0; i < products.length; i++) {
-      const product = products[i];
+      console.log('\n  [' + (i+1) + '/' + products.length + '] ' + (products[i].brand||'?') + ' - ' + (products[i].name||'?'));
 
-      // 이미지 다운로드 (검색에서 얻은 thumbnail_url 사용)
+      // 전성분 추출 (상세 페이지)
+      let product = await getProductDetail(page, products[i]);
+
+      // 이미지 다운로드
       const imgUrl = product.thumbnail_url;
       if (imgUrl) {
         const ext = (imgUrl.match(/\.(jpg|jpeg|png|webp|gif)/i) || [])[1] || 'jpg';
@@ -470,8 +386,11 @@ async function main() {
       }
 
       detailed.push(product);
-      const hasImg = product.thumbnail_url ? String.fromCodePoint(0x2705) : String.fromCodePoint(0x274C);
-      console.log('   [' + (i+1) + '/' + products.length + '] ' + (product.brand||'?') + ' - ' + (product.name||'?') + ' ' + hasImg);
+
+      // WAF 감지 방지를 위한 랜덤 딜레이
+      if (i < products.length - 1) {
+        await randomDelay();
+      }
     }
 
     // 결과 저장
@@ -480,9 +399,12 @@ async function main() {
     fs.writeFileSync(jsonFile, JSON.stringify(detailed, null, 2));
 
     // 요약
+    const withIng = detailed.filter(p => p.ingredients && p.ingredients.length > 0).length;
+    const withImg = detailed.filter(p => p.image_local).length;
     console.log('\n============================================');
     console.log('  수집 완료: ' + detailed.length + '개 제품');
-    console.log('  이미지: ' + detailed.filter(p => p.image_local).length + '개 다운로드');
+    console.log('  전성분: ' + withIng + '개 제품 수집');
+    console.log('  이미지: ' + withImg + '개 다운로드');
     console.log('  저장: ' + jsonFile);
     console.log('');
     console.log('  DB 저장: node src/save-to-db.mjs ' + jsonFile);
