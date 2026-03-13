@@ -8,12 +8,16 @@ v2 변경사항:
 """
 import json, subprocess, sys, time, re, os, urllib.request, urllib.parse
 
-GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyBxMGCU97ghOR8BgZOaZ2DH8YTAtNB0zqk")
+GEMINI_KEY = os.environ.get("GEMINI_API_KEY")
+if not GEMINI_KEY:
+    print("ERROR: GEMINI_API_KEY 환경변수를 설정하세요. (set GEMINI_API_KEY=키값)")
+    sys.exit(1)
 DELAY = 4
 
 DB_ENV = {**os.environ, "PGPASSWORD": "coching2026!"}
 PSQL = os.environ.get("PSQL_PATH", r"C:\Program Files\PostgreSQL\17\bin\psql.exe")
 DB_CMD = [PSQL, "-h", "172.21.144.1", "-U", "coching_user", "-d", "coching_db", "-t", "-A"]
+# Windows: -c 인자는 cp949 인코딩 → stdin으로 SQL 전달해야 UTF-8 유지
 
 # 비화장품 카테고리 — 이 카테고리로 분류된 문서는 저장하지 않음
 EXCLUDED_CATEGORIES = {
@@ -27,7 +31,7 @@ EXCLUDED_CATEGORIES = {
 
 
 def run_sql(sql):
-    r = subprocess.run(DB_CMD + ["-c", sql], capture_output=True, text=True, env=DB_ENV, encoding="utf-8")
+    r = subprocess.run(DB_CMD, input=sql, capture_output=True, text=True, env=DB_ENV, encoding="utf-8")
     return r.stdout.strip()
 
 
@@ -42,7 +46,9 @@ def run_sql_params(sql, params):
     result_sql = sql
     for e in escaped:
         result_sql = result_sql.replace("%s", e, 1)
-    r = subprocess.run(DB_CMD + ["-c", result_sql], capture_output=True, text=True, env=DB_ENV, encoding="utf-8")
+    r = subprocess.run(DB_CMD, input=result_sql, capture_output=True, text=True, env=DB_ENV, encoding="utf-8")
+    if r.returncode != 0:
+        print(f"    [SQL ERR] rc={r.returncode} {r.stderr[:200]}")
     return r.stdout.strip()
 
 

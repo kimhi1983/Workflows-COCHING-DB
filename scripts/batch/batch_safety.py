@@ -12,7 +12,10 @@ import json, subprocess, sys, time, re, os, urllib.request, io
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
-GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyBxMGCU97ghOR8BgZOaZ2DH8YTAtNB0zqk")
+GEMINI_KEY = os.environ.get("GEMINI_API_KEY")
+if not GEMINI_KEY:
+    print("ERROR: GEMINI_API_KEY 환경변수를 설정하세요. (set GEMINI_API_KEY=키값)")
+    sys.exit(1)
 BATCH_SIZE = 5
 ROUNDS = int(sys.argv[1]) if len(sys.argv) > 1 else 50
 DELAY = 4
@@ -21,31 +24,31 @@ COUNTRIES = ["KR", "EU", "US", "JP", "CN"]
 DB_ENV = {**os.environ, "PGPASSWORD": "coching2026!"}
 PSQL = os.environ.get("PSQL_PATH", r"C:\Program Files\PostgreSQL\17\bin\psql.exe")
 DB_CMD = [PSQL, "-h", "172.21.144.1", "-U", "coching_user", "-d", "coching_db", "-t", "-A"]
+# Windows에서 -c 인자는 cp949로 인코딩됨 → stdin으로 SQL 전달해야 UTF-8 유지
+DB_CMD_STDIN = DB_CMD  # -c 없이 stdin 사용
 
 
 def run_sql(sql):
-    """SQL 실행 (파라미터 없는 단순 쿼리용)"""
-    r = subprocess.run(DB_CMD + ["-c", sql], capture_output=True, text=True, env=DB_ENV, encoding="utf-8")
+    """SQL 실행 (stdin으로 전달 — UTF-8 한글 지원)"""
+    r = subprocess.run(DB_CMD_STDIN, input=sql, capture_output=True, text=True, env=DB_ENV, encoding="utf-8")
     return r.stdout.strip()
 
 
 def run_sql_params(sql, params):
-    """SQL 실행 (psql 변수 바인딩 — 인젝션 방지)"""
-    # psql은 $1 바인딩을 지원하지 않으므로 안전한 이스케이프 사용
-    # 모든 파라미터를 PostgreSQL 문자열 이스케이프
+    """SQL 실행 (파라미터 이스케이프 + stdin 전달)"""
     escaped = []
     for p in params:
         if p is None:
             escaped.append("NULL")
         else:
-            # 싱글쿼트 이스케이프 + 백슬래시 이스케이프
             safe = str(p).replace("\\", "\\\\").replace("'", "''")
             escaped.append(f"'{safe}'")
-    # %s 순서대로 치환
     result_sql = sql
     for e in escaped:
         result_sql = result_sql.replace("%s", e, 1)
-    r = subprocess.run(DB_CMD + ["-c", result_sql], capture_output=True, text=True, env=DB_ENV, encoding="utf-8")
+    r = subprocess.run(DB_CMD_STDIN, input=result_sql, capture_output=True, text=True, env=DB_ENV, encoding="utf-8")
+    if r.returncode != 0:
+        print(f"    [SQL ERR] rc={r.returncode} {r.stderr[:200]}")
     return r.stdout.strip()
 
 
